@@ -1,0 +1,45 @@
+---
+title: "ReadMe_ADA"
+author: "Ziyun Meng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+### ReadMe_ADA
+
+## ADA Final Project 2024 FALL
+
+# Project Description
+
+This project analyzes the association between physical exercise duration and days of poor mental health status in Missouri adults. The dataset is from 2023 Behavioral Risk Factor Surveillance System (BRFSS). This analysis also include age, sex, race, income level and education level as confounders, to expolore their association between physical exercise duration and mental health status.
+
+# Code Description
+
+The R Markdown document (FP1) includes several sections of R code which perform the following functions:
+
+  Packages Installation and Data import: Installs necessary packages and imports data from XPT format files into R using the haven package.
+  Data Cleaning AND Recoding: Use multiple imputation to deal with missing data and recoding variables.
+  Descriptive Statistics: Generates descriptive statistics and visualizations to understand the data distribution.
+  Data Analysis: Perform bivariate analysis to decide include which variables into model. Conduct mutinominal logistic regression to explore associations between physical activity duration and mental health status, using likelihood ratio test to test if confounding factors will affect model fit. Detect effect modification and perform multinominal logistic regression again based on adjusted model.
+  
+# Dataset Description
+
+This dataset is a .XPT file from 2023 BRFSS that containing health-related risk behaviors, chronic health conditions, health-care access, and use of preventive services from the noninstitutionalized adult population (≥ 18 years) residing in the United States and participating areas.
+
+# Installation
+
+You need to install R and RStudio to run the code. Please install following packages before you run it:
+
+haven, tidyverse, naniar, VIM, mice, lattice, table1, dplyr
+
+# Contribution
+
+Welcome to make more contributions to this project. You can contribute by:
+
+    Improving the efficiency of R code.
+    Enhancing the data visualization.
+    Expanding the analysis to include more variables from 2023 BRFSS.
+    
+# Contact infomation
+
+For support or collaboration, please email m.ziyun@wustl.edu
