@@ -1,0 +1,351 @@
+---
+title: "Final Project ADA"
+author: "Ziyun Meng"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+pacman::p_load(haven, tidyverse, naniar, VIM, mice, lattice, table1, dplyr)
+
+```
+
+```{r}
+library(haven)
+BRFSS2023 <- read_xpt("LLCP2023.XPT")
+```
+
+```{r Data Selection}
+
+df_raw <- BRFSS2023
+nrow(df_raw)
+
+
+df_state <- df_raw[df_raw$`_STATE` == 29, ]
+nrow(df_state)
+
+df_adult <- df_state[df_state$CADULT1 == 1, ]
+nrow(df_adult)
+
+df_status <- df_adult[!df_adult$POORHLTH %in% c(77, 99) & !is.na(df_adult$POORHLTH), ]
+nrow(df_status)
+
+
+df_status$ACT_DUR <- df_status$`PADUR1_` + df_status$`PADUR2_`
+
+df_dur <- filter(df_status, !is.na(ACT_DUR))
+nrow(df_dur)
+
+df <- df_dur %>%
+  select(ACT_DUR, POORHLTH, `_AGE_G`, CELLSEX2, `_IMPRACE`, INCOME3, `_EDUCAG`)
+
+
+summary(df)
+```
+
+```{r Missing Data}
+
+library(dplyr)
+
+df_1 <- df %>%
+  mutate(
+    INCOME3 = ifelse(INCOME3 %in% c(77, 99), NA, INCOME3),
+    CELLSEX2 = ifelse(CELLSEX2 %in% c(3, 7, 9), NA, CELLSEX2),
+    `_IMPRACE` = ifelse(`_IMPRACE` == 6, NA, `_IMPRACE`),
+    `_EDUCAG` = ifelse(`_EDUCAG` == 9, NA, `_EDUCAG`),
+    POORHLTH = ifelse(POORHLTH == 88, 0, POORHLTH)
+  )
+
+summary(df_1)
+
+
+md.pattern(df_1, rotate.names=TRUE)
+md.pairs(df_1)
+
+df_1 <- df_1 %>%
+  rename(
+    AGE_G = `_AGE_G`,
+    IMPRACE = `_IMPRACE`,
+    EDUCAG = `_EDUCAG`,
+  )
+
+imp <- mice(df_1, m = 10, maxit = 5, seed = 1000000)
+imp
+
+imp1 <- mice::complete(data=imp, action=1) 
+
+imp$ID <- seq.int(nrow(imp1))
+summary(imp1)
+```
+
+```{r Variables Recode}
+
+pacman::p_load(tidyverse, readr, table1, DiagrammeR, rsvg)
+
+imp2<-imp1
+colnames(imp2)
+
+names(imp2)<-c(
+               "ACT_DUR", "MENTAL HEALTH STATUS", "AGE", "SEX", "RACE", 
+               "INCOME", "EDUCATION"
+               ) 
+
+view(imp2)
+summary(imp2)
+
+df_2 <- imp2 %>%
+  # Recode AGE variable and create labeled factor variable
+  mutate(age_f = case_when(
+           AGE == 1 ~ 0,
+           AGE == 2 ~ 1,
+           AGE == 3 ~ 2,
+           AGE == 4 ~ 3,
+           AGE == 5 ~ 4,
+           AGE == 6 ~ 5
+         ),
+         age_f = factor(age_f, labels = c("Age 18 to 24", "Age 25 to 34", "Age 35 to 44",
+                                          "Age 45 to 54", "Age 55 to 64", "Age 65 or older")),
+         
+         # Recode SEX variable and create labeled factor variable
+         sex_f = case_when(
+           SEX == 1 ~ 0,
+           SEX == 2 ~ 1
+         ),
+         sex_f = factor(sex_f, labels = c("Male", "Female")),
+         
+         # Recode INCOME variable and create labeled factor variable
+         income_f = case_when(
+           INCOME %in% c(1, 2) ~ 0,
+           INCOME %in% c(3, 4) ~ 1,
+           INCOME %in% c(5, 6) ~ 2,
+           TRUE ~ 3
+         ),
+         income_f = factor(income_f, labels = c("<$15,000", "$15,000 to <$25,000",
+                                                "$25,000–$50,000", ">$50,000")),
+         
+         # Recode RACE variable and create labeled factor variable
+         race_f = case_when(
+           RACE == 1 ~ 0,
+           RACE == 2 ~ 1,
+           RACE == 3 ~ 2,
+           RACE == 4 ~ 3,
+           RACE == 5 ~ 4
+         ),
+         race_f = factor(race_f, labels = c("White", "Black", "Asian",
+                                            "American Indian/Alaskan Native", "Hispanic")),
+         
+         # Recode EDUCATION variable and create labeled factor variable
+         education_f = case_when(
+           EDUCATION == 1 ~ 0,
+           EDUCATION == 2 ~ 1,
+           EDUCATION == 3 ~ 2,
+           EDUCATION == 4 ~ 3
+         ),
+         education_f = factor(education_f, labels = c("Did not graduate High School",
+                                                      "Graduated High School",
+                                                      "Attended College or Technical School",
+                                                      "Graduated from College or Technical School")),
+         
+
+         # Recode ACT_DUR variable and create labeled factor variable for exercise intensity
+         act_dur_f = case_when(
+           ACT_DUR >= 0 & ACT_DUR < 150   ~ 0,
+           ACT_DUR >= 150 & ACT_DUR < 300 ~ 1,
+           ACT_DUR >= 300 & ACT_DUR < 600 ~ 2,
+           ACT_DUR >= 600                ~ 3
+         ),
+         act_dur_f = factor(act_dur_f, labels = c("Low Exercise Intensity (< 150 mins/per week)", 
+                                                  "Moderate Exercise Intensity (150 - 299 mins/per week)", 
+                                                  "High Exercise Intensity (300 - 600 mins/per week)", 
+                                                  "Extremely High Exercise Intensity (> 600 mins/per week)")),
+
+         # Recode MENTAL HEALTH STATUS and create labeled factor variable
+         `MENTAL HEALTH STATUS` = case_when(
+           `MENTAL HEALTH STATUS` == 0 ~ 0,
+           `MENTAL HEALTH STATUS` >= 1 & `MENTAL HEALTH STATUS` < 10 ~ 1,
+           `MENTAL HEALTH STATUS` >= 10 & `MENTAL HEALTH STATUS` < 20 ~ 2,
+           `MENTAL HEALTH STATUS` >= 20 & `MENTAL HEALTH STATUS` <= 30 ~ 3
+         ),
+         `MENTAL HEALTH STATUS` = factor(`MENTAL HEALTH STATUS`, labels = c("0",  "<10", "10-19", "20-30"))
+  )
+
+
+
+summary(df_2)
+
+```
+
+```{r Figure 1 & Table 1}
+grViz(diagram = "digraph flowchart{ # gives beginning of flowchart
+
+      # node definitions with substituted label text
+      
+      node [fontname = Helvetica, shape = rectangle, fontsize=10] 
+      
+      # Define the nodes: nodes indicate how many boxes you will have in your diagram. Since I have three sets of exclusions, I will have four nodes.
+      
+      node1 [label = '@@1'] # starting number
+      node2 [label = '@@2'] # number after exclusion 1
+      node3 [label = '@@3'] # number after exclusion 2
+      node4 [label = '@@4'] # number after exclusion 3
+      
+      # edge definitions with the node IDs are used to indicate how the rectangle boxes flow from each other. 
+      
+      node1 -> node2 -> node3 -> node4
+}
+      # This set of code provides the text in each rectangle box.
+      [1]: 'Number of people surveyed by BRFSS in 2023 n=433,323'
+      [2]: 'Excluding the number of people who are not Missouri and not adult n=7,219'
+      [3]: 'Excluding the number of people who are missing mental health status n=3,253'
+      [4]: 'Excluding the number of people who are missing physical exercise duration n=1,307'
+      ")
+
+label(df_2$age_f)<-"Age (years)"
+label(df_2$sex_f)<-"Sex"
+label(df_2$race_f)<-"Race"
+label(df_2$education_f)<-"Education Level"
+label(df_2$income_f)<-"Income Level"
+label(df_2$`MENTAL HEALTH STATUS`)<-"Days of Poor Mental Health (days/per month)"
+
+ # tb1  
+  table1(~ age_f + sex_f + race_f + education_f + income_f + `MENTAL HEALTH STATUS`|act_dur_f, overall="Total", rowlabelhead="Variable",  footnote='SD = standard deviation', df_2)
+  
+
+```
+
+```{r Chi-test}
+
+library(dplyr)
+
+chi_test_exercise_mental_health <- chisq.test(table(df_2$act_dur_f, df_2$`MENTAL HEALTH STATUS`))
+
+print(chi_test_exercise_mental_health)
+
+chi_test_age_exercise <- chisq.test(table(df_2$age_f, df_2$act_dur_f))
+chi_test_sex_exercise <- chisq.test(table(df_2$sex_f, df_2$act_dur_f))
+chi_test_race_exercise <- chisq.test(table(df_2$race_f, df_2$act_dur_f))
+chi_test_education_exercise <- chisq.test(table(df_2$education_f, df_2$act_dur_f))
+chi_test_income_exercise <- chisq.test(table(df_2$income_f, df_2$act_dur_f))
+
+print(chi_test_age_exercise)
+print(chi_test_sex_exercise)
+print(chi_test_race_exercise)
+print(chi_test_education_exercise)
+print(chi_test_income_exercise)
+
+chi_test_age_mental_health <- chisq.test(table(df_2$age_f, df_2$`MENTAL HEALTH STATUS`))
+chi_test_sex_mental_health <- chisq.test(table(df_2$sex_f, df_2$`MENTAL HEALTH STATUS`))
+chi_test_race_mental_health <- chisq.test(table(df_2$race_f, df_2$`MENTAL HEALTH STATUS`))
+chi_test_education_mental_health <- chisq.test(table(df_2$education_f, df_2$`MENTAL HEALTH STATUS`))
+chi_test_income_mental_health <- chisq.test(table(df_2$income_f, df_2$`MENTAL HEALTH STATUS`))
+
+print(chi_test_age_mental_health)
+print(chi_test_sex_mental_health)
+print(chi_test_race_mental_health)
+print(chi_test_education_mental_health)
+print(chi_test_income_mental_health)
+
+```
+
+```{r Bivariate Analysis}
+# load packages
+pacman::p_load(readr, tidyverse, nnet, MASS, funModeling, brant, broom, epitools)
+
+#bivariate analysis
+
+table <-table(df_2$act_dur_f, df_2$`MENTAL HEALTH STATUS`)
+result <- oddsratio(table)
+print(result)
+
+table1 <-table(df_2$age_f, df_2$`MENTAL HEALTH STATUS`)
+result1 <- oddsratio(table)
+print(result1)
+
+table2 <-table(df_2$sex_f, df_2$`MENTAL HEALTH STATUS`)
+result2 <- oddsratio(table)
+print(result2)
+
+table3 <-table(df_2$race_f, df_2$`MENTAL HEALTH STATUS`)
+table4 <-table(df_2$education_f, df_2$`MENTAL HEALTH STATUS`)
+table5 <-table(df_2$income_f, df_2$`MENTAL HEALTH STATUS`)
+
+
+result3 <- oddsratio(table)
+result4 <- oddsratio(table)
+result5 <- oddsratio(table)
+
+
+print(result3)
+print(result4)
+print(result5)
+```
+
+```{r Test for Parallel Assumption}
+
+model4 <- polr(`MENTAL HEALTH STATUS`~ act_dur_f, data=df_2) 
+summary(model4)
+
+tidy(model4, conf.int=TRUE, exponentiate = TRUE)
+
+model5 <- polr(`MENTAL HEALTH STATUS`~ act_dur_f + age_f + sex_f + race_f + education_f + income_f, data=df_2)
+summary(model5)
+
+tidy(model5, conf.int=TRUE, exponentiate = TRUE)
+
+#Univariate model
+brant(model4)
+
+# Multivariate model
+brant(model5)
+```
+
+```{r MLR - Model 1}
+
+model1 <- multinom(`MENTAL HEALTH STATUS`~ act_dur_f, data=df_2)
+summary(model1)
+
+# extract the coefficients from the model and exponentiate to get OR
+exp(coef(model1))
+
+# get confidence intervals for ORs
+exp(confint(model1, level=0.95))
+
+z <- summary(model1)$coefficients/summary(model1)$standard.errors
+
+# 2-tailed Z test
+p <- (1 - pnorm(abs(z), 0, 1))*2
+p
+
+# Broom
+
+tidy(model1, exponentiate = TRUE, conf.int = TRUE)
+```
+
+```{r MLR - Model 2}
+model2 <- multinom(`MENTAL HEALTH STATUS`~ act_dur_f + age_f + sex_f + race_f + education_f + income_f, data=df_2)
+
+summary(model2)
+
+tidy(model2, exponentiate = TRUE,  conf.int=TRUE)
+
+```
+
+```{r LRT Model 1 vs. Model 2}
+lrtest(model1, model2)
+```
+
+```{r MLR - Age as interaction}
+
+# Model with act_dur and age*act_dur
+model3<-multinom(`MENTAL HEALTH STATUS`~ act_dur_f*age_f + sex_f + race_f + education_f + income_f, data=df_2)
+summary(model3)
+
+tidy(model3, exponentiate = TRUE,  conf.int=TRUE)
+```
+
+```{r LRT Model 2 vs. Model 3}
+# Test the hypothesis with the lrtest
+lrtest(model2, model3)
+```
+
+
